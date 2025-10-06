@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suffolk Law Policy Navigator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f9fafb;
+            min-height: 100vh;
+            color: #374151;
+            line-height: 1.65;
+        }
+        
+        .container { 
+            max-width: 750px; 
+            margin: 0 auto; 
+            padding: 40px 20px;
+        }
+        
+        .header {
+            text-align: center;
+            padding: 0 0 40px 0;
+        }
+        
+        .header h1 { 
+            color: #111827; 
+            font-size: 30px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+        
+        .header p { 
+            color: #6b7280; 
+            font-size: 15px;
+            font-weight: 400;
+        }
+        
+        .chat-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        
+        .input-area { 
+            margin-bottom: 12px;
+        }
+        
+        #q {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1.5px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 110px;
+            transition: border-color 0.2s;
+            line-height: 1.5;
+        }
+        
+        #q:focus { 
+            outline: none; 
+            border-color: #3b82f6;
+        }
+        
+        #q::placeholder {
+            color: #9ca3af;
+        }
+        
+        #askBtn {
+            width: 100%;
+            padding: 12px 20px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        #askBtn:hover { 
+            background: #1d4ed8;
+        }
+        
+        #askBtn:disabled { 
+            opacity: 0.5; 
+            cursor: not-allowed; 
+        }
+        
+        .loading { 
+            text-align: center; 
+            padding: 40px 20px; 
+            color: #6b7280;
+        }
+        
+        .spinner {
+            border: 2px solid #f3f4f6;
+            border-top: 2px solid #3b82f6;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+        
+        @keyframes spin { 
+            0% { transform: rotate(0deg); } 
+            100% { transform: rotate(360deg); } 
+        }
+        
+        .response-box {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            padding: 24px;
+            margin-top: 16px;
+        }
+        
+        .response-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        
+        .response-header h3 { 
+            color: #111827; 
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .answer { 
+            color: #374151; 
+            font-size: 15px;
+            line-height: 1.7;
+            margin-bottom: 24px;
+        }
+        
+        .answer p {
+            margin-bottom: 12px;
+        }
+        
+        .answer strong {
+            color: #111827;
+            font-weight: 600;
+        }
+        
+        .answer a {
+            color: #2563eb;
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+            transition: border-color 0.2s;
+        }
+        
+        .answer a:hover {
+            border-bottom-color: #2563eb;
+        }
+        
+        .sources { 
+            border-top: 1px solid #f3f4f6; 
+            padding-top: 20px;
+            margin-top: 20px;
+        }
+        
+        .sources h4 { 
+            color: #111827; 
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        
+        .source-item {
+            background: #f9fafb;
+            padding: 14px 16px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #f3f4f6;
+            transition: border-color 0.2s;
+        }
+        
+        .source-item:hover {
+            border-color: #e5e7eb;
+        }
+        
+        .source-title { 
+            font-weight: 600; 
+            color: #111827; 
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+        
+        .source-category {
+            display: inline-block;
+            padding: 3px 8px;
+            background: #dbeafe;
+            color: #1e40af;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        .source-link { 
+            color: #2563eb; 
+            text-decoration: none; 
+            font-size: 13px;
+            font-weight: 500;
+        }
+        
+        .source-link:hover { 
+            text-decoration: underline;
+        }
+        
+        .error { 
+            background: #fef2f2; 
+            color: #991b1b; 
+            padding: 16px; 
+            border-radius: 8px; 
+            margin-top: 16px;
+            border: 1px solid #fee2e2;
+            font-size: 14px;
+        }
+        
+        .disclaimer {
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        
+        .disclaimer p { 
+            color: #92400e; 
+            font-size: 13px; 
+            line-height: 1.6;
+        }
+        
+        .disclaimer strong {
+            font-weight: 600;
+        }
+        
+        .disclaimer a {
+            color: #92400e;
+            text-decoration: underline;
+            font-weight: 500;
+        }
+        
+        .disclaimer a:hover {
+            color: #78350f;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Suffolk Law Policy Navigator</h1>
+            <p>Get AI-powered answers about Suffolk Law policies and procedures</p>
+        </div>
+        
+        <div class="chat-container">
+            <div class="input-area">
+                <textarea 
+                    id="q" 
+                    placeholder="Ask any question about Suffolk Law policies...
+
+Examples:
+- What should I do if I need to postpone an exam?
+- How do I request academic accommodations?
+- What is the attendance policy?"
+                ></textarea>
+            </div>
+            <button id="askBtn" onclick="askQ()">Ask Question</button>
+            <div id="response"></div>
+        </div>
+        
+        <div class="disclaimer">
+            <p>
+                <strong>⚠️ Important:</strong> This tool provides AI-generated answers based on Suffolk Law policies. 
+                It can make mistakes. Always verify information with 
+                <a href="https://www.suffolk.edu/law/academics-clinics/student-life/policies-rules" target="_blank">official Suffolk Law policies</a>, 
+                or contact 
+                <a href="mailto:AcadServLaw@suffolk.edu">Academic Services</a> or the 
+                <a href="mailto:LawDeanofStudents@suffolk.edu">Dean of Students Office</a> 
+                for authoritative guidance.
+            </p>
+        </div>
+    </div>
+    
+    <script>
+        function formatAnswer(text) {
+            // Auto-bold key terms
+            let formatted = text
+                // Bold policy names
+                .replace(/\b(According to|The policy states|The handbook states|As stated in)\b/gi, '<strong>$1</strong>')
+                // Bold contact info
+                .replace(/\b(must|required|should|contact|email)\b/gi, '<strong>$1</strong>')
+                // Bold important phrases
+                .replace(/\b(Dean of Students Office|Office of Academic Services|Academic Services)\b/g, '<strong>$1</strong>')
+                // Bold numbers and requirements
+                .replace(/\b(\d+ (days?|hours?|credits?|semesters?))\b/g, '<strong>$1</strong>')
+                // Bold email addresses
+                .replace(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g, '<strong>$1</strong>')
+                // Bold phone numbers
+                .replace(/(\d{3}[-.]?\d{3}[-.]?\d{4})/g, '<strong>$1</strong>');
+            
+           // Convert URLs to links (excluding trailing punctuation)
+            formatted = formatted.replace(
+                /(https?:\/\/[^\s<]+?)([.,;:!?)\]]*(?:\s|$))/g, 
+                '<a href="$1" target="_blank">$1</a>$2'
+            );
+            
+            // Convert line breaks to paragraphs
+            formatted = formatted
+                .split('\n\n')
+                .map(para => para.trim() ? `<p>${para}</p>` : '')
+                .join('');
+            
+            return formatted;
+        }
+        
+        async function askQ() {
+            const q = document.getElementById('q').value.trim();
+            const r = document.getElementById('response');
+            const b = document.getElementById('askBtn');
+            
+            if (!q || q.length < 5) { 
+                alert('Please enter a question (at least 5 characters)'); 
+                return; 
+            }
+            
+            b.disabled = true;
+            r.innerHTML = '<div class="loading"><div class="spinner"></div><p>Analyzing Suffolk Law policies...</p></div>';
+            
+            try {
+                const res = await fetch('http://localhost:3001/api/ask', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({question: q})
+                });
+                
+                const d = await res.json();
+                
+                if (d.success) {
+                    const formattedAnswer = formatAnswer(d.answer);
+                    
+                    let s = '';
+                    if (d.sources && d.sources.length > 0) {
+                        s = `<div class="sources">
+                            <h4>📚 Sources Referenced</h4>
+                            ${d.sources.map(x => `
+                                <div class="source-item">
+                                    <div class="source-title">${x.title}</div>
+                                    <span class="source-category">${x.category}</span><br>
+                                    <a href="${x.url}" target="_blank" class="source-link">View Official Policy →</a>
+                                </div>
+                            `).join('')}
+                        </div>`;
+                    }
+                    
+                    r.innerHTML = `
+                        <div class="response-box">
+                            <div class="response-header">
+                                <h3>Answer</h3>
+                            </div>
+                            <div class="answer">${formattedAnswer}</div>
+                            ${s}
+                        </div>
+                    `;
+                } else {
+                    r.innerHTML = `
+                        <div class="error">
+                            <strong>Error:</strong> ${d.error || 'Unable to process your question'}
+                        </div>
+                    `;
+                }
+            } catch (e) {
+                r.innerHTML = `
+                    <div class="error">
+                        <strong>Error:</strong> Cannot connect to server. Make sure the server is running!
+                    </div>
+                `;
+            } finally {
+                b.disabled = false;
+            }
+        }
+        
+        // Allow Enter key to submit (Shift+Enter for new line)
+        document.getElementById('q').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                askQ();
+            }
+        });
+    </script>
+</body>
+</html>
