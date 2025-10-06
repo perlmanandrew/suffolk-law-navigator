@@ -126,11 +126,13 @@ Answer briefly using ONLY these policies. Cite by name. Include URLs as clickabl
   }
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = parseInt(process.env.PORT) || 3001;
 console.log('=== SERVER STARTING ===');
-console.log('Port:', PORT);
+console.log('Port from env:', process.env.PORT);
+console.log('Port being used:', PORT);
 console.log('Node version:', process.version);
 console.log('Current directory:', __dirname);
+app.listen(PORT, () => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server successfully running on port ${PORT}`);
   console.log('Server is ready to accept connections');
