@@ -134,8 +134,7 @@ console.log('Current directory:', __dirname);
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server successfully running on port ${PORT}`);
   console.log('Server is ready to accept connections');
-});
-console.log('\n' + '='.repeat(60));
+  console.log('\n' + '='.repeat(60));
   console.log('✅ Suffolk Law AI Q&A Server Running!');
   console.log('='.repeat(60));
   console.log(`🌐 Server: http://localhost:${PORT}`);
