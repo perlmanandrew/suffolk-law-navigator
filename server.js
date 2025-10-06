@@ -133,7 +133,7 @@ console.log('Port being used:', PORT);
 console.log('Node version:', process.version);
 console.log('Current directory:', __dirname);
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server successfully running on port ${PORT}`);
   console.log('Server is ready to accept connections');
   console.log('\n' + '='.repeat(60));
