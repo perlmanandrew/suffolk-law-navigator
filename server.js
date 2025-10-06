@@ -127,8 +127,15 @@ Answer briefly using ONLY these policies. Cite by name. Include URLs as clickabl
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log('\n' + '='.repeat(60));
+console.log('=== SERVER STARTING ===');
+console.log('Port:', PORT);
+console.log('Node version:', process.version);
+console.log('Current directory:', __dirname);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server successfully running on port ${PORT}`);
+  console.log('Server is ready to accept connections');
+});
+console.log('\n' + '='.repeat(60));
   console.log('✅ Suffolk Law AI Q&A Server Running!');
   console.log('='.repeat(60));
   console.log(`🌐 Server: http://localhost:${PORT}`);
