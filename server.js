@@ -164,78 +164,120 @@ app.post('/api/ask', async (req, res) => {
       });
     }
 
+    // First, try to find relevant policies in database
     const result = await pool.query(
       'SELECT * FROM policies WHERE is_active = true ORDER BY last_updated DESC LIMIT 15'
     );
     
     const policies = result.rows;
     
-    if (!policies || policies.length === 0) {
-      return res.json({
-        success: true,
-        question,
-        answer: "I currently don't have any policies loaded in my database. Please contact AcadServLaw@suffolk.edu or LawDeanofStudents@suffolk.edu for assistance.\n\n⚠️ Please note: This tool can make mistakes. Always verify with actual Suffolk Law policies.",
-        sources: [],
-        confidence: 'low',
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    console.log(`📚 Found ${policies.length} policies`);
+    // If we have policies, use them
+    if (policies && policies.length > 0) {
+      console.log(`📚 Found ${policies.length} policies in database`);
 
-    const context = policies.map((p, i) => 
-      `[Policy ${i+1}]\nTitle: ${p.title}\nContent: ${p.content.substring(0, 1000)}\nURL: ${p.source_url}\n---`
-    ).join('\n\n');
+      const context = policies.map((p, i) => 
+        `[Policy ${i+1}]\nTitle: ${p.title}\nContent: ${p.content.substring(0, 1000)}\nURL: ${p.source_url}\n---`
+      ).join('\n\n');
 
-    console.log('🧠 Asking Claude...');
+      console.log('🧠 Asking Claude with database policies...');
 
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1500,
-      temperature: 0.2,
-      messages: [{
-        role: 'user',
-        content: `${SUFFOLK_INSTRUCTIONS}
+      const response = await anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1500,
+        temperature: 0.2,
+        messages: [{
+          role: 'user',
+          content: `${SUFFOLK_INSTRUCTIONS}
 
 POLICIES:
 ${context}
 
 QUESTION: ${question}
 
-Answer briefly using ONLY these policies. Cite by name. Include URLs as clickable links. If unclear, say so and recommend contacts. Keep concise. End with disclaimer.`
-      }]
-    });
+Answer briefly using ONLY these policies. If these policies don't fully answer the question, say "I found some relevant information in my database, but I should search Suffolk Law's website for more complete information." Cite by name. Include URLs as clickable links. Keep concise. End with disclaimer.`
+        }]
+      });
 
-    let answer = response.content[0].text;
+      let answer = response.content[0].text;
+      
+      // Check if Claude suggests we need more info
+      if (answer.includes('should search') || answer.includes('more complete information') || answer.includes("don't fully address")) {
+        console.log('🔍 Database policies insufficient, searching Suffolk Law website...');
+        
+        // Trigger web search fallback
+        try {
+          const searchAnswer = await searchSuffolkWebsite(question);
+          if (searchAnswer) {
+            answer = `Based on my database:\n${answer}\n\n---\n\n**Additional information from Suffolk Law website:**\n${searchAnswer}`;
+          }
+        } catch (searchErr) {
+          console.error('Web search error:', searchErr);
+        }
+      }
+      
+      if (!answer.includes('⚠️')) {
+        answer += '\n\n⚠️ Please note: This tool can make mistakes. Verify with actual Suffolk Law policies or contact AcadServLaw@suffolk.edu or LawDeanofStudents@suffolk.edu.';
+      }
+
+      const sources = policies.slice(0, 5).map(p => ({
+        id: p.id,
+        title: p.title,
+        category: p.category,
+        url: p.source_url
+      }));
+
+      console.log('✅ Answer generated!\n');
+
+      try {
+        await pool.query(
+          'INSERT INTO qa_interactions (question, answer, sources, confidence) VALUES ($1, $2, $3, $4)',
+          [question, answer, JSON.stringify(sources), 'high']
+        );
+      } catch (logErr) {
+        console.error('Warning: Could not log interaction:', logErr);
+      }
+
+      return res.json({
+        success: true,
+        question,
+        answer,
+        sources,
+        confidence: 'high',
+        timestamp: new Date().toISOString()
+      });
+    }
     
-    if (!answer.includes('⚠️')) {
-      answer += '\n\n⚠️ Please note: This tool can make mistakes. Verify with actual Suffolk Law policies or contact AcadServLaw@suffolk.edu or LawDeanofStudents@suffolk.edu.';
-    }
-
-    const sources = policies.slice(0, 5).map(p => ({
-      id: p.id,
-      title: p.title,
-      category: p.category,
-      url: p.source_url
-    }));
-
-    console.log('✅ Answer generated!\n');
-
+    // No policies in database - search website directly
+    console.log('📭 No policies in database, searching Suffolk Law website...');
+    
     try {
-      await pool.query(
-        'INSERT INTO qa_interactions (question, answer, sources, confidence) VALUES ($1, $2, $3, $4)',
-        [question, answer, JSON.stringify(sources), 'high']
-      );
-    } catch (logErr) {
-      console.error('Warning: Could not log interaction:', logErr);
+      const webAnswer = await searchSuffolkWebsite(question);
+      
+      if (webAnswer) {
+        return res.json({
+          success: true,
+          question,
+          answer: webAnswer + '\n\n⚠️ Please note: This information was found by searching Suffolk Law\'s website. Verify with actual Suffolk Law policies or contact AcadServLaw@suffolk.edu or LawDeanofStudents@suffolk.edu.',
+          sources: [{
+            title: 'Suffolk Law Website',
+            category: 'web-search',
+            url: 'https://www.suffolk.edu/law'
+          }],
+          confidence: 'medium',
+          timestamp: new Date().toISOString()
+        });
+      }
+    } catch (searchErr) {
+      console.error('Web search failed:', searchErr);
     }
-
-    res.json({
+    
+    // Fallback if everything fails
+    return res.json({
       success: true,
       question,
-      answer,
-      sources,
-      confidence: 'high',
+      answer: "I currently don't have enough information to answer this question. Please contact AcadServLaw@suffolk.edu or LawDeanofStudents@suffolk.edu for assistance.\n\n⚠️ Please note: This tool can make mistakes. Always verify with actual Suffolk Law policies.",
+      sources: [],
+      confidence: 'low',
       timestamp: new Date().toISOString()
     });
 
@@ -247,6 +289,87 @@ Answer briefly using ONLY these policies. Cite by name. Include URLs as clickabl
     });
   }
 });
+
+// Helper function to search Suffolk Law website
+async function searchSuffolkWebsite(question) {
+  const axios = require('axios');
+  const cheerio = require('cheerio');
+  
+  try {
+    // Extract key terms from question
+    const keywords = question
+      .toLowerCase()
+      .replace(/[?.,!]/g, '')
+      .split(' ')
+      .filter(w => w.length > 3 && !['what', 'when', 'where', 'how', 'should', 'would', 'could', 'the', 'this', 'that'].includes(w))
+      .slice(0, 3)
+      .join(' ');
+    
+    console.log(`🔍 Searching Suffolk Law website for: "${keywords}"`);
+    
+    // Use Google to search Suffolk Law site
+    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(keywords + ' site:suffolk.edu/law')}`;
+    
+    const response = await axios.get(searchUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      timeout: 10000
+    });
+    
+    const $ = cheerio.load(response.data);
+    
+    // Extract first few search results
+    const results = [];
+    $('div.g').slice(0, 3).each((i, elem) => {
+      const title = $(elem).find('h3').text();
+      const snippet = $(elem).find('.VwiC3b').text();
+      const link = $(elem).find('a').attr('href');
+      
+      if (title && snippet && link && link.includes('suffolk.edu/law')) {
+        results.push({ title, snippet, link });
+      }
+    });
+    
+    if (results.length === 0) {
+      return null;
+    }
+    
+    // Format results for Claude
+    const searchContext = results.map((r, i) => 
+      `[Result ${i+1}]\nTitle: ${r.title}\nSnippet: ${r.snippet}\nURL: ${r.link}\n---`
+    ).join('\n\n');
+    
+    console.log(`✅ Found ${results.length} web results`);
+    
+    // Ask Claude to synthesize the web results
+    const anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY
+    });
+    
+    const aiResponse = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 800,
+      temperature: 0.2,
+      messages: [{
+        role: 'user',
+        content: `Based on these search results from Suffolk Law's website:
+
+${searchContext}
+
+Question: ${question}
+
+Provide a brief, helpful answer based on these search results. Include relevant URLs. If the results don't clearly answer the question, say so.`
+      }]
+    });
+    
+    return aiResponse.content[0].text;
+    
+  } catch (err) {
+    console.error('Search error:', err.message);
+    return null;
+  }
+}
 // Admin endpoint to populate database
 app.get('/admin/populate-db', async (req, res) => {
   try {
