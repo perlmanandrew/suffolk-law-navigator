@@ -527,9 +527,11 @@ app.get('/admin/full-populate', async (req, res) => {
         INSERT INTO policies (external_id, title, category, content, summary, source_url, source_name)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
         ON CONFLICT (external_id) DO UPDATE SET
-          content = EXCLUDED.content,
-          summary = EXCLUDED.summary,
-          last_updated = CURRENT_TIMESTAMP
+  content = EXCLUDED.content,
+  summary = EXCLUDED.summary,
+  source_url = EXCLUDED.source_url,
+  source_name = EXCLUDED.source_name,
+  last_updated = CURRENT_TIMESTAMP
         RETURNING (xmax = 0) AS inserted
       `, [p.external_id, p.title, p.category, p.content, p.summary, p.source_url, p.source_name]);
       
