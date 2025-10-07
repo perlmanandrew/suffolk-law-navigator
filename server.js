@@ -278,15 +278,15 @@ app.get('/admin/populate-db', async (req, res) => {
         source_url: 'https://www.suffolk.edu/law/academics-clinics/student-life/policies-rules',
         source_name: 'Exam Policy'
       },
-      {
-        external_id: 'library-study-rooms',
-        title: 'Library Study Rooms',
-        category: 'library',
-        content: 'The Suffolk Law Library offers study rooms that can be booked online. Visit the library website or use the room booking system. Study rooms are available on a first-come, first-served basis. Contact the library at 617-573-8595 for assistance.',
-        summary: 'Book study rooms online through library website',
-        source_url: 'https://www.suffolk.edu/law/faculty-research/about-the-library',
-        source_name: 'Law Library'
-      },
+        {
+  external_id: 'library-study-rooms',
+  title: 'Law Library Study Rooms',
+  category: 'library',
+  content: 'The Suffolk Law Library offers study rooms available for reservation. Rooms can be booked online through the library website or reservation system. Study rooms are available on a first-come, first-served basis. Group study rooms accommodate 4-8 people. For assistance, contact the library at 617-573-8595.',
+  summary: 'Book study rooms online through library website',
+  source_url: 'https://www.suffolk.edu/law/faculty-research/about-the-library/library-study-rooms',
+  source_name: 'Library Study Rooms'
+},
       {
         external_id: 'academic-accommodations',
         title: 'Academic Accommodations',
