@@ -199,21 +199,40 @@ Answer briefly using ONLY these policies. If these policies don't fully answer t
       });
 
       let answer = response.content[0].text;
-      
+      let sources = policies.slice(0, 5).map(p => ({
+  id: p.id,
+  title: p.title,
+  category: p.category,
+  url: p.source_url
+}));
       // Check if Claude suggests we need more info
-      if (answer.includes('should search') || answer.includes('more complete information') || answer.includes("don't fully address")) {
-        console.log('🔍 Database policies insufficient, searching Suffolk Law website...');
-        
-        // Trigger web search fallback
-        try {
-          const searchAnswer = await searchSuffolkWebsite(question);
-          if (searchAnswer) {
-            answer = `Based on my database:\n${answer}\n\n---\n\n**Additional information from Suffolk Law website:**\n${searchAnswer}`;
-          }
-        } catch (searchErr) {
-          console.error('Web search error:', searchErr);
-        }
+if (
+  answer.includes('should search') ||
+  answer.includes('more complete information') ||
+  answer.includes("don't fully address")
+) {
+  console.log('🔍 Database policies insufficient, searching Suffolk Law website...');
+
+  try {
+    const webPack = await searchWeb(question, { siteLimit: 'suffolk.edu', maxResults: 3 });
+
+    if (webPack && webPack.text) {
+      answer =
+        `Based on my database:\n${answer}\n\n---\n\n` +
+        `**Additional information found on the web:**\n${webPack.text}`;
+
+      if (webPack.results?.length) {
+        sources.unshift({
+          title: webPack.results[0].title,
+          category: 'web',
+          url: webPack.results[0].link
+        });
       }
+    }
+  } catch (searchErr) {
+    console.error('Web search error:', searchErr);
+  }
+}
       
       if (!answer.includes('⚠️')) {
         answer += '\n\n⚠️ Please note: This tool can make mistakes. Verify with actual Suffolk Law policies or contact AcadServLaw@suffolk.edu or LawDeanofStudents@suffolk.edu.';
@@ -248,28 +267,25 @@ Answer briefly using ONLY these policies. If these policies don't fully answer t
     }
     
     // No policies in database - search website directly
-    console.log('📭 No policies in database, searching Suffolk Law website...');
-    
-    try {
-      const webAnswer = await searchSuffolkWebsite(question);
-      
-      if (webAnswer) {
-        return res.json({
-          success: true,
-          question,
-          answer: webAnswer + '\n\n⚠️ Please note: This information was found by searching Suffolk Law\'s website. Verify with actual Suffolk Law policies or contact AcadServLaw@suffolk.edu or LawDeanofStudents@suffolk.edu.',
-          sources: [{
-            title: 'Suffolk Law Website',
-            category: 'web-search',
-            url: 'https://www.suffolk.edu/law'
-          }],
-          confidence: 'medium',
-          timestamp: new Date().toISOString()
-        });
-      }
-    } catch (searchErr) {
-      console.error('Web search failed:', searchErr);
-    }
+console.log('📭 No policies in database, searching Suffolk Law website...');
+try {
+  const webOnly = await searchWeb(question, { siteLimit: 'suffolk.edu', maxResults: 3 });
+  if (webOnly?.text) {
+    return res.json({
+      success: true,
+      question,
+      answer: `${webOnly.text}\n\n⚠️ Please note: This information was found on the web. Verify with actual Suffolk Law policies or contact AcadServLaw@suffolk.edu or LawDeanofStudents@suffolk.edu.`,
+      sources: (webOnly.results || []).map(r => ({
+        title: r.title,
+        category: 'web',
+        url: r.link
+      })),
+      confidence: 'medium',
+      timestamp: new Date().toISOString()
+    });
+  }
+} catch (searchErr) {
+  console.error('Web search failed:', searchErr);
     
     // Fallback if everything fails
     return res.json({
@@ -291,86 +307,121 @@ Answer briefly using ONLY these policies. If these policies don't fully answer t
 });
 
 // Helper function to search Suffolk Law website
-async function searchSuffolkWebsite(question) {
+// ---- Web search helper (Google CSE -> DuckDuckGo fallback) ----
+async function searchWeb(question, { siteLimit = null, maxResults = 3 } = {}) {
   const axios = require('axios');
   const cheerio = require('cheerio');
-  
-  try {
-    // Extract key terms from question
-    const keywords = question
-      .toLowerCase()
-      .replace(/[?.,!]/g, '')
-      .split(' ')
-      .filter(w => w.length > 3 && !['what', 'when', 'where', 'how', 'should', 'would', 'could', 'the', 'this', 'that'].includes(w))
-      .slice(0, 3)
-      .join(' ');
-    
-    console.log(`🔍 Searching Suffolk Law website for: "${keywords}"`);
-    
-    // Use Google to search Suffolk Law site
-    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(keywords + ' site:suffolk.edu/law')}`;
-    
-    const response = await axios.get(searchUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      },
-      timeout: 10000
+
+  // Build a reasonable query (keep it simple and robust)
+  const keywords = question
+    .toLowerCase()
+    .replace(/[?.,!]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 3 && !['what','when','where','how','should','would','could','the','this','that','does','can','with','from','your','about'].includes(w))
+    .slice(0, 6)
+    .join(' ');
+
+  const q = siteLimit ? `${keywords} site:${siteLimit}` : keywords;
+
+  const tryGoogleCSE = async () => {
+    const { GOOGLE_API_KEY, GOOGLE_CSE_ID } = process.env;
+    if (!GOOGLE_API_KEY || !GOOGLE_CSE_ID) return null;
+
+    const url = 'https://www.googleapis.com/customsearch/v1';
+    const { data } = await axios.get(url, {
+      params: { key: GOOGLE_API_KEY, cx: GOOGLE_CSE_ID, q, num: maxResults }
     });
-    
-    const $ = cheerio.load(response.data);
-    
-    // Extract first few search results
+
+    if (!data.items || !Array.isArray(data.items)) return null;
+
+    return data.items
+      .filter(it => it.link && it.title)
+      .slice(0, maxResults)
+      .map(it => ({
+        title: it.title,
+        snippet: it.snippet || '',
+        link: it.link
+      }));
+  };
+
+  const tryDuckDuckGo = async () => {
+    // DuckDuckGo HTML endpoint; simple, stable markup we can parse
+    const searchUrl = `https://duckduckgo.com/html/?q=${encodeURIComponent(q)}`;
+    const resp = await axios.get(searchUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      timeout: 15000
+    });
+
+    const $ = cheerio.load(resp.data);
     const results = [];
-    $('div.g').slice(0, 3).each((i, elem) => {
-      const title = $(elem).find('h3').text();
-      const snippet = $(elem).find('.VwiC3b').text();
-      const link = $(elem).find('a').attr('href');
-      
-      if (title && snippet && link && link.includes('suffolk.edu/law')) {
-        results.push({ title, snippet, link });
-      }
+    $('.result').each((i, el) => {
+      if (results.length >= maxResults) return;
+      const $el = $(el);
+      const $a = $el.find('a.result__a');
+      const $snip = $el.find('.result__snippet');
+      const title = $a.text().trim();
+      let link = $a.attr('href');
+      const snippet = $snip.text().trim();
+
+      // Skip junk
+      if (!title || !link) return;
+
+      // DuckDuckGo sometimes wraps links; prefer direct http(s)
+      const m = link.match(/https?:\/\/[^\s&]+/i);
+      if (m) link = m[0];
+
+      results.push({ title, snippet, link });
     });
-    
-    if (results.length === 0) {
-      return null;
+
+    return results;
+  };
+
+  try {
+    let results = await tryGoogleCSE();
+    if (!results || results.length === 0) {
+      results = await tryDuckDuckGo();
     }
-    
-    // Format results for Claude
-    const searchContext = results.map((r, i) => 
-      `[Result ${i+1}]\nTitle: ${r.title}\nSnippet: ${r.snippet}\nURL: ${r.link}\n---`
+    if (!results || results.length === 0) return null;
+
+    // Create a compact context for the LLM
+    const context = results.map((r, i) =>
+      `[Result ${i + 1}]\nTitle: ${r.title}\nSnippet: ${r.snippet}\nURL: ${r.link}\n---`
     ).join('\n\n');
-    
-    console.log(`✅ Found ${results.length} web results`);
-    
-    // Ask Claude to synthesize the web results
-    const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY
-    });
-    
-    const aiResponse = await anthropic.messages.create({
+
+    // Ask Anthropic to synthesize a short answer that includes a link or two
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const synth = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 800,
+      max_tokens: 600,
       temperature: 0.2,
       messages: [{
         role: 'user',
-        content: `Based on these search results from Suffolk Law's website:
+        content:
+`You are helping Suffolk Law students find reliable, official info.
 
-${searchContext}
+Search results:
+${context}
 
-Question: ${question}
+Original question: ${question}
 
-Provide a brief, helpful answer based on these search results. Include relevant URLs. If the results don't clearly answer the question, say so.`
+Write a brief, helpful summary using these results. Prefer official university or government pages when present.
+- Include 1–2 direct links (the best ones) inline in the text.
+- If the results seem off-topic or unclear, say so explicitly.`
       }]
     });
-    
-    return aiResponse.content[0].text;
-    
+
+    // Return both the text and the structured results so the UI can show sources
+    return {
+      text: synth.content[0].text,
+      results
+    };
   } catch (err) {
-    console.error('Search error:', err.message);
+    console.error('searchWeb error:', err.message);
     return null;
   }
 }
-// Admin endpoint to populate database
+    
+   // Admin endpoint to populate database
 app.get('/admin/populate-db', async (req, res) => {
   try {
     const policies = [
