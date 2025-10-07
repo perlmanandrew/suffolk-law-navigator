@@ -557,6 +557,46 @@ app.get('/admin/full-populate', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+// ... your other endpoints like /admin/full-populate ...
+
+// ADD THE NEW CODE HERE ⬇️⬇️⬇️
+
+// Admin endpoint to FORCE update all URLs (deletes and recreates)
+app.get('/admin/force-refresh-all', async (req, res) => {
+  try {
+    console.log('🔄 Force refreshing all policies...');
+    
+    await pool.query('DELETE FROM policies');
+    
+    const allPolicies = [
+      // ... all the policy data I provided ...
+    ];
+
+    for (const p of allPolicies) {
+      await pool.query(`
+        INSERT INTO policies (external_id, title, category, content, summary, source_url, source_name)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [p.external_id, p.title, p.category, p.content, p.summary, p.source_url, p.source_name]);
+    }
+
+    const result = await pool.query('SELECT COUNT(*) FROM policies');
+    
+    res.json({
+      success: true,
+      message: 'All policies deleted and recreated with correct URLs',
+      total: parseInt(result.rows[0].count)
+    });
+  } catch (err) {
+    console.error('Error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// END NEW CODE ⬆️⬆️⬆️
+
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
