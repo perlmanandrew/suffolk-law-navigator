@@ -2,7 +2,20 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const Anthropic = require('@anthropic-ai/sdk');
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
+
+pool.on('connect', () => {
+  console.log('✅ PostgreSQL connected');
+});
+
+pool.on('error', (err) => {
+  console.error('❌ PostgreSQL error:', err);
+});
 
 const app = express();
 app.use(cors());
@@ -66,8 +79,13 @@ app.post('/api/ask', async (req, res) => {
       });
     }
 
-    db.all('SELECT * FROM policies WHERE is_active = 1 LIMIT 15', async (err, policies) => {
-      if (err) return res.status(500).json({ success: false, error: err.message });
+try {
+  const result = await pool.query('SELECT * FROM policies WHERE is_active = 1');
+  const policies = result.rows;
+  // ... rest of code
+} catch (err) {
+  return res.status(500).json({ success: false, error: 'Database error' });
+}
       
       console.log(`📚 Found ${policies.length} policies`);
 
