@@ -247,7 +247,90 @@ Answer briefly using ONLY these policies. Cite by name. Include URLs as clickabl
     });
   }
 });
+// Admin endpoint to populate database
+app.get('/admin/populate-db', async (req, res) => {
+  try {
+    const policies = [
+      {
+        external_id: 'absence-short-term',
+        title: 'Short-Term Absences (1-2 Days)',
+        category: 'attendance',
+        content: 'For absences of one or two days due to illness, family issues, or short-term conflicts, email your professors directly. The Dean of Students Office does not need to be contacted for these short absences. As a professional courtesy, always notify your professors of absences.',
+        summary: 'Email professors for 1-2 day absences',
+        source_url: 'https://www.suffolk.edu/law/academics-clinics/student-life/policies-rules/academic-rules-regulations#rule2B',
+        source_name: 'Attendance Policy'
+      },
+      {
+        external_id: 'absence-extended',
+        title: 'Extended Absences (3+ Days)',
+        category: 'attendance',
+        content: 'If you will be absent for more than three consecutive days or will exceed the Applicable Absence Limitation for any class, you must contact the Dean of Students Office at lawdeanofstudents@suffolk.edu or 617-573-8157.',
+        summary: 'Contact Dean of Students for absences over 3 days',
+        source_url: 'https://www.suffolk.edu/law/academics-clinics/student-life/policies-rules/academic-rules-regulations#rule2B',
+        source_name: 'Attendance Policy'
+      },
+      {
+        external_id: 'exam-emergency',
+        title: 'Emergency During Exam Period',
+        category: 'exams',
+        content: 'If you are ill or have a significant personal emergency causing a conflict with an exam, contact the Dean of Students Office by emailing lawdeanofstudents@suffolk.edu or calling 617-573-8157. Because of exam anonymity, you MUST NOT alert your professor(s).',
+        summary: 'Contact Dean of Students for exam emergencies',
+        source_url: 'https://www.suffolk.edu/law/academics-clinics/student-life/policies-rules',
+        source_name: 'Exam Policy'
+      },
+      {
+        external_id: 'library-study-rooms',
+        title: 'Library Study Rooms',
+        category: 'library',
+        content: 'The Suffolk Law Library offers study rooms that can be booked online. Visit the library website or use the room booking system. Study rooms are available on a first-come, first-served basis. Contact the library at 617-573-8595 for assistance.',
+        summary: 'Book study rooms online through library website',
+        source_url: 'https://www.suffolk.edu/law/faculty-research/about-the-library',
+        source_name: 'Law Library'
+      },
+      {
+        external_id: 'academic-accommodations',
+        title: 'Academic Accommodations',
+        category: 'student-services',
+        content: 'Students with disabilities who require accommodations should contact Disability Services. Accommodations must be arranged in advance. Contact lawdeanofstudents@suffolk.edu for information about the accommodation process.',
+        summary: 'Contact Disability Services for accommodations',
+        source_url: 'https://www.suffolk.edu/law/academics-clinics/student-life/policies-rules',
+        source_name: 'Student Services'
+      },
+      {
+        external_id: 'attendance-tracking',
+        title: 'Attendance Tracking',
+        category: 'attendance',
+        content: 'Students should scan the QR code in each classroom for attendance. If unable to scan but present, communicate via the follow-up email. Physical presence is required - remote work does not count toward attendance.',
+        summary: 'Scan QR code for attendance tracking',
+        source_url: 'https://www.suffolk.edu/law/academics-clinics/student-life/policies-rules/academic-rules-regulations',
+        source_name: 'Attendance Policy'
+      }
+    ];
 
+    let added = 0;
+    for (const p of policies) {
+      await pool.query(`
+        INSERT INTO policies (external_id, title, category, content, summary, source_url, source_name)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (external_id) DO UPDATE SET
+          content = EXCLUDED.content,
+          last_updated = CURRENT_TIMESTAMP
+      `, [p.external_id, p.title, p.category, p.content, p.summary, p.source_url, p.source_name]);
+      added++;
+    }
+
+    const result = await pool.query('SELECT COUNT(*) FROM policies');
+    
+    res.json({
+      success: true,
+      message: `Added ${added} policies`,
+      total: result.rows[0].count
+    });
+  } catch (err) {
+    console.error('Error populating database:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
