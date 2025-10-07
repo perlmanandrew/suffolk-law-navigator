@@ -568,22 +568,29 @@ app.get('/admin/force-refresh-all', async (req, res) => {
     
     await pool.query('DELETE FROM policies');
     
-    const allPolicies = [
-      // ... all the policy data I provided ...
+    const policies = [
+      ['absence-short-term', 'Short-Term Absences (1-2 Days)', 'attendance', 'For absences of one or two days due to illness, family issues, or short-term conflicts, email your professors directly. The Dean of Students Office does not need to be contacted for these short absences.', 'Email professors for 1-2 day absences', 'https://www.suffolk.edu/law/academics-clinics/student-life/policies-rules/academic-rules-regulations#rule2B', 'Attendance Policy'],
+      ['absence-extended', 'Extended Absences (3+ Days)', 'attendance', 'If you will be absent for more than three consecutive days, contact the Dean of Students Office at lawdeanofstudents@suffolk.edu or 617-573-8157.', 'Contact Dean of Students for 3+ days', 'https://www.suffolk.edu/law/academics-clinics/student-life/policies-rules/academic-rules-regulations#rule2B', 'Attendance Policy'],
+      ['exam-emergency', 'Emergency During Exam Period', 'exams', 'If you are ill or have an emergency during exams, contact the Dean of Students Office by emailing lawdeanofstudents@suffolk.edu. Do NOT contact your professor due to exam anonymity.', 'Contact Dean of Students for exam emergencies', 'https://www.suffolk.edu/law/academics-clinics/student-life/policies-rules/student-policies-procedures/exam-postponement-and-rescheduling-requests-policy', 'Exam Postponement'],
+      ['library-study-rooms', 'Law Library Study Rooms', 'library', 'The Suffolk Law Library offers study rooms available for reservation. Rooms can be booked online through the library website. Group study rooms accommodate 4-8 people. For assistance, contact the library at 617-573-8595.', 'Book study rooms online', 'https://www.suffolk.edu/law/faculty-research/about-the-library/library-study-rooms', 'Library Study Rooms'],
+      ['academic-accommodations', 'Academic Accommodations', 'student-services', 'Students with disabilities who require accommodations should contact Disability Services early. Accommodations must be arranged in advance. Contact lawdeanofstudents@suffolk.edu for information.', 'Contact Disability Services for accommodations', 'https://www.suffolk.edu/law/academics-clinics/student-life/policies-rules/student-policies-procedures/academic-accommodations', 'Academic Accommodations'],
+      ['attendance-tracking', 'Attendance Tracking', 'attendance', 'Students should scan the QR code in each classroom for attendance. If unable to scan but present, communicate via follow-up email. Physical presence is required.', 'Scan QR code for attendance', 'https://www.suffolk.edu/law/academics-clinics/student-life/policies-rules/academic-rules-regulations#rule2B', 'Attendance Policy'],
+      ['exam-regulations', 'Exam Regulations', 'exams', 'All students must follow exam regulations including anonymous grading, time limits, and honor code. Exams must be taken during scheduled times unless postponement is approved.', 'Follow exam regulations and honor code', 'https://www.suffolk.edu/law/academics-clinics/student-life/policies-rules/student-policies-procedures/exam-regulations-policy', 'Exam Regulations'],
+      ['dean-of-students', 'Dean of Students Office', 'student-services', 'The Dean of Students Office provides support for academic, personal, and professional concerns. Contact for attendance issues, exam conflicts, leaves of absence. Email lawdeanofstudents@suffolk.edu or call 617-573-8157.', 'Central resource for student support', 'https://www.suffolk.edu/law/academics-clinics/student-life', 'Dean of Students']
     ];
 
-    for (const p of allPolicies) {
+    for (const p of policies) {
       await pool.query(`
         INSERT INTO policies (external_id, title, category, content, summary, source_url, source_name)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `, [p.external_id, p.title, p.category, p.content, p.summary, p.source_url, p.source_name]);
+      `, p);
     }
 
     const result = await pool.query('SELECT COUNT(*) FROM policies');
     
     res.json({
       success: true,
-      message: 'All policies deleted and recreated with correct URLs',
+      message: 'Policies recreated with correct URLs',
       total: parseInt(result.rows[0].count)
     });
   } catch (err) {
@@ -591,7 +598,6 @@ app.get('/admin/force-refresh-all', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-
 // END NEW CODE ⬆️⬆️⬆️
 
 app.use((req, res) => {
