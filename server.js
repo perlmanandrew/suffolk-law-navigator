@@ -23,13 +23,63 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-pool.on('connect', () => {
-  console.log('✅ PostgreSQL connected');
-});
-
-pool.on('error', (err) => {
-  console.error('❌ PostgreSQL error:', err);
-});
+// AUTO-INITIALIZE DATABASE ON STARTUP
+async function initializeDatabase() {
+  try {
+    console.log('🗄️  Checking database tables...');
+    
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS policies (
+        id SERIAL PRIMARY KEY,
+        external_id VARCHAR(255) UNIQUE NOT NULL,
+        title TEXT NOT NULL,
+        category VARCHAR(100) NOT NULL,
+        content TEXT NOT NULL,
+        summary TEXT,
+        source_url TEXT,
+        source_name TEXT,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_policies_external_id ON policies(external_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_policies_category ON policies(category)`);
+    
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS qa_interactions (
+        id SERIAL PRIMARY KEY,
+        question TEXT NOT NULL,
+        answer TEXT NOT NULL,
+        sources TEXT,
+        confidence VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    await pool.query(`
+      INSERT INTO policies (external_id, title, category, content, summary, source_url, source_name)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ON CONFLICT (external_id) DO NOTHING
+    `, [
+      'sample-attendance',
+      'Sample Attendance Policy',
+      'academic',
+      'This is a sample policy for testing. Students are expected to attend classes regularly. For absences of 1-2 days, email professors directly. For absences exceeding 3 days, contact the Dean of Students Office.',
+      'Sample attendance policy',
+      'https://www.suffolk.edu/law',
+      'Sample Policy'
+    ]);
+    
+    const result = await pool.query('SELECT COUNT(*) FROM policies');
+    console.log(`✅ Database initialized. Policies in database: ${result.rows[0].count}`);
+    
+  } catch (err) {
+    console.error('❌ Database initialization error:', err);
+    throw err;
+  }
+}
 
 const SUFFOLK_INSTRUCTIONS = `You are a helpful guide to Suffolk Law School. Provide brief, neutral answers.
 
@@ -209,30 +259,34 @@ app.use((err, req, res, next) => {
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
-console.log('='.repeat(60));
-console.log('🚀 STARTING SERVER...');
-console.log('='.repeat(60));
-console.log('Environment:', process.env.NODE_ENV || 'development');
-console.log('Port:', PORT);
-console.log('Database:', process.env.DATABASE_URL ? 'PostgreSQL (configured)' : 'Not configured');
-console.log('='.repeat(60));
+// INITIALIZE DATABASE THEN START SERVER
+initializeDatabase()
+  .then(() => {
+    console.log('='.repeat(60));
+    console.log('🚀 STARTING SERVER...');
+    console.log('='.repeat(60));
+    console.log('Environment:', process.env.NODE_ENV || 'development');
+    console.log('Port:', PORT);
+    console.log('='.repeat(60));
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log('\n✅ ✅ ✅ SERVER STARTED SUCCESSFULLY! ✅ ✅ ✅\n');
-  console.log('='.repeat(60));
-  console.log('✅ Suffolk Law AI Q&A Server Running!');
-  console.log('='.repeat(60));
-  console.log(`🌐 Server: http://0.0.0.0:${PORT}`);
-  console.log(`📋 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`💾 Database: PostgreSQL`);
-  console.log('📋 Suffolk Guidelines: ACTIVE ✅');
-  console.log('✉️  Academic: AcadServLaw@suffolk.edu');
-  console.log('✉️  Dean: LawDeanofStudents@suffolk.edu');
-  console.log('🚨 Emergency: 617-573-8111');
-  console.log('='.repeat(60));
-  console.log('\n✅ Listening on 0.0.0.0:' + PORT);
-  console.log('✅ Ready to accept connections!\n');
-});
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log('\n✅ ✅ ✅ SERVER STARTED SUCCESSFULLY! ✅ ✅ ✅\n');
+      console.log('='.repeat(60));
+      console.log('✅ Suffolk Law AI Q&A Server Running!');
+      console.log('='.repeat(60));
+      console.log(`🌐 Server: http://0.0.0.0:${PORT}`);
+      console.log(`💾 Database: PostgreSQL with auto-init`);
+      console.log('✉️  Academic: AcadServLaw@suffolk.edu');
+      console.log('✉️  Dean: LawDeanofStudents@suffolk.edu');
+      console.log('🚨 Emergency: 617-573-8111');
+      console.log('='.repeat(60));
+      console.log('\n✅ Ready to accept connections!\n');
+    });
+  })
+  .catch((err) => {
+    console.error('❌ Failed to start server:', err);
+    process.exit(1);
+  });
 
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, closing database pool...');
